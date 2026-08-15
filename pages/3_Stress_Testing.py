@@ -55,10 +55,12 @@ def fetch_close(tickers, start, end):
 
 # --- Crisis windows (well-known Black-Swan / bear episodes) ---
 CRISES = {
-    "2008 Global Financial Crisis": ("2007-10-01", "2009-12-31"),
-    "2020 COVID Crash":             ("2020-01-01", "2020-08-31"),
-    "2018 Q4 Selloff":              ("2018-09-01", "2019-04-30"),
-    "2022 Rate-Hike Bear":          ("2022-01-01", "2022-12-31"),
+    "1997 Tom Yum Kung (Asian Crisis)": ("1997-06-01", "1999-06-30"),
+    "2000 Dot-com Crash":               ("2000-03-01", "2003-06-30"),
+    "2008 Global Financial Crisis":     ("2007-10-01", "2009-12-31"),
+    "2018 Q4 Selloff":                  ("2018-09-01", "2019-04-30"),
+    "2020 COVID Crash":                 ("2020-01-01", "2020-08-31"),
+    "2022 Rate-Hike Bear":              ("2022-01-01", "2022-12-31"),
 }
 BENCHMARK = "SPY"
 
@@ -192,6 +194,9 @@ st.markdown(f"**Total Assets:** {len(active_tickers)} | **Sum Weight:** {total_w
 st.header("2. Choose Crises")
 chosen = st.multiselect("Crisis windows to replay", list(CRISES.keys()),
                         default=["2008 Global Financial Crisis", "2020 COVID Crash"])
+st.caption("⚠️ Pre-2005 crises (Tom Yum Kung, Dot-com) only replay if your portfolio holds long-history assets — "
+           "individual stocks (e.g. AAPL, MSFT) or indices (e.g. ^GSPC). Most ETFs launched later and are skipped "
+           "automatically, with a note telling you which.")
 run = st.button("🌊 Run Stress Test", use_container_width=True)
 
 # --- Section 3: Results ---
