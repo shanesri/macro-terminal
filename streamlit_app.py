@@ -133,6 +133,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# --- Sidebar greeting ---
+with st.sidebar:
+    st.markdown("## สวัสดี 🙏 Welcome!")
+    st.caption("A little lab where I turn finance theory into working tools — pick one from the menu above.")
+
 # --- Header ---
 st.title("📈 Welcome to the Macro Terminal")
 
@@ -141,10 +146,8 @@ st.markdown(
     """
     <div class="intro-section">
         <h3>A bit about me</h3>
-        <p>Hi! I’m <strong>Shane from Thailand 🇹🇭</strong>. I recently passed the <strong>CFA Level 3</strong> exam, and after spending so much time buried in textbooks, 
-        I really wanted to see if I could actually build something with all that theory. This app is just a hobby project of mine to practice 
-        and show how some of those CFA concepts look when you put them into code. It's my way of proving I can bridge the gap 
-        between financial theory and practical application!</p>
+        <p>Hi! I’m <strong>Shane from Thailand 🇹🇭</strong>. I work in <strong>finance</strong> and I’ve passed all three levels of the <strong>CFA Program</strong>. 
+        This app is my personal lab for turning CFA concepts into working, interactive tools — a place to explore portfolio theory in code rather than just on paper.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -152,7 +155,7 @@ st.markdown(
 
 # --- Workflow ---
 st.subheader("How I built this (The 'Finance Guy' way)")
-st.write("I’m definitely not a professional developer, so I looked for the easiest and most efficient way to get this running:")
+st.write("I’m definitely not a professional developer — I’m a finance guy who leaned on **AI, Python, and Streamlit** to bring these ideas to life. Huge thanks to those tools for doing the heavy lifting so I could focus on the finance. Here’s the simple stack I used:")
 
 st.markdown(
     """
@@ -182,58 +185,58 @@ if st.button("🎈 Celebrate with Streamlit magic!", use_container_width=True):
 st.divider()
 
 # --- Roadmap ---
-st.subheader("🗺️ Stuff I’m working on")
+st.subheader("🗺️ What I’ve built")
 
 st.markdown(
     """
     <div class="roadmap-container">
+        <div class="status-pill">All 6 phases live 🎉</div>
         <!-- Phase 1 -->
-        <div class="phase-card">
-            <div class="phase-badge"></div>
-            <h4 style="margin: 0;">Phase 1: Buy & Hold MCS (Completed)</h4>
+        <div class="phase-card active">
+            <div class="phase-badge active"></div>
+            <h4 style="margin: 0;">Phase 1 · Buy & Hold Monte Carlo ✅</h4>
             <p style="color: #8b949e; font-size: 14px; margin-top: 10px;">
-                Just the basics. You pick your stocks, choose a date range, and set your weights. The app then runs a Monte Carlo Simulation (MCS) to show you a range of what might happen to your money over time.
+                Pick your assets, a date range, and weights; a Monte Carlo simulation shows the range of outcomes your portfolio could see over time.
             </p>
         </div>
         <!-- Phase 2 -->
-        <div class="phase-card">
-            <div class="phase-badge"></div>
-            <h4 style="margin: 0;">Phase 2: Finding "Better" Weights (Completed)</h4>
+        <div class="phase-card active">
+            <div class="phase-badge active"></div>
+            <h4 style="margin: 0;">Phase 2 · Finding "Better" Weights ✅</h4>
             <p style="color: #8b949e; font-size: 14px; margin-top: 10px;">
-                Instead of just guessing weights, I want to add an "Efficient Frontier" tool. This helps find the specific mix of stocks that gives you the best return for the risk you're taking.
+                An Efficient Frontier optimizer that finds the mix of assets giving the best return for the level of risk you take.
             </p>
         </div>
         <!-- Phase 3 -->
         <div class="phase-card active">
             <div class="phase-badge active"></div>
-            <div class="status-pill">Where we are: Phase 3 (Building Now) 🚧</div>
-            <h4 style="margin: 0;">Phase 3: Stress Testing</h4>
+            <h4 style="margin: 0;">Phase 3 · Stress Testing ✅</h4>
             <p style="color: #8b949e; font-size: 14px; margin-top: 10px;">
-                What happens if things go wrong? I want to build a feature that tests how your portfolio would have survived "Black Swan" events like the 2008 crash or the 2020 COVID drop.
+                Replays your portfolio through real Black-Swan events (2008, COVID, Tom Yum Kung) and can simulate crisis-level volatility to show how it would hold up.
             </p>
         </div>
         <!-- Phase 4 -->
-        <div class="phase-card">
-            <div class="phase-badge"></div>
-            <h4 style="margin: 0;">Phase 4: Different Weighting Styles</h4>
+        <div class="phase-card active">
+            <div class="phase-badge active"></div>
+            <h4 style="margin: 0;">Phase 4 · Alternative Weighting ✅</h4>
             <p style="color: #8b949e; font-size: 14px; margin-top: 10px;">
-                Moving beyond just "Buy & Hold." I'll be looking at other methods like Risk Parity to see if they actually make a difference in the long run.
+                Risk Parity weighting — each asset is sized by its volatility so every holding contributes a similar amount of risk.
             </p>
         </div>
         <!-- Phase 5 -->
-        <div class="phase-card">
-            <div class="phase-badge"></div>
-            <h4 style="margin: 0;">Phase 5: Real-World Math</h4>
+        <div class="phase-card active">
+            <div class="phase-badge active"></div>
+            <h4 style="margin: 0;">Phase 5 · Real-World Math ✅</h4>
             <p style="color: #8b949e; font-size: 14px; margin-top: 10px;">
-                Standard math assumes markets are "normal," but we know they aren't. I want to add non-normal distribution models to account for those crazy market "tail risks."
+                Fat-tailed (Student-t) returns, so extreme crashes are modelled far more realistically than a plain bell curve allows.
             </p>
         </div>
         <!-- Phase 6 -->
-        <div class="phase-card">
-            <div class="phase-badge"></div>
-            <h4 style="margin: 0;">Phase 6: To Rebalance or Not?</h4>
+        <div class="phase-card active">
+            <div class="phase-badge active"></div>
+            <h4 style="margin: 0;">Phase 6 · To Rebalance or Not? ✅</h4>
             <p style="color: #8b949e; font-size: 14px; margin-top: 10px;">
-                Adding a feature to simulate auto-rebalancing so we can see if checking in every 6 or 12 months actually helps your returns.
+                Compare Buy & Hold against periodic and threshold rebalancing to see whether — and how often — resetting your weights actually helps.
             </p>
         </div>
     </div>
@@ -246,7 +249,7 @@ st.divider()
 st.subheader("🤝 Let’s chat!")
 st.markdown(
     """
-    I’m currently looking for my first role in finance, so if you’re hiring or just want to talk shop, I’d love to connect! Also, if you find a bug or have a cool idea for a feature, please let me know.
+    I work in finance and love talking markets. If you want to talk shop — or you’ve spotted a bug or have an idea for the app — I’d love to hear from you.
     
     👉 **LinkedIn:** [shanesri](https://www.linkedin.com/in/shanesri/)
     """,

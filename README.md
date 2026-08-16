@@ -17,7 +17,8 @@ macro-terminal/
 ├── streamlit_app.py                    # Home: intro + roadmap (app entry point)
 ├── pages/
 │   ├── 1_Weight_Optimizer.py          # Efficient Frontier optimizer (MPT)
-│   └── 2_Monte_Carlo_Simulator.py     # Buy & Hold Monte Carlo simulation
+│   ├── 2_Monte_Carlo_Simulator.py     # Monte Carlo (+ Crisis regime option)
+│   └── 3_Crisis_Replay.py             # Historical stress test (actual crisis path)
 ├── requirements.txt
 ├── .devcontainer/
 └── README.md
