@@ -416,6 +416,53 @@ if st.session_state.tickers_list:
     with s_col4:
         initial_investment = st.number_input("Initial ($)", min_value=1, value=10000, help="Your starting investment amount.")
 
+    # --- Return Distribution: Normal vs fat-tailed (Student-t) ---
+    st.markdown("**Return Distribution** — the shape of the random daily shocks the simulation draws.")
+    dist_col1, dist_col2 = st.columns([1, 1])
+    with dist_col1:
+        dist_choice = st.radio("Distribution",
+                               ["🎯 Student-t · fat tails (Recommended)", "🔔 Normal · thin tails"],
+                               label_visibility="collapsed")
+    use_t = dist_choice.startswith("🎯")
+    t_df = 5
+    with dist_col2:
+        if use_t:
+            t_df = st.slider("Tail heaviness (degrees of freedom)", 3, 15, 5,
+                             help="Lower = fatter tails (more frequent extreme moves). ~4–6 is typical for daily stock returns; higher approaches Normal.")
+    if use_t:
+        st.caption("🎯 **Student-t** better matches real markets, where crashes happen more often than a bell curve predicts. "
+                   "Extreme days also hit assets *together* (correlated tails) — a more honest view of tail risk.")
+    else:
+        st.caption("🔔 **Normal** is the classic bell curve. Simple, but it *understates* how often big crashes actually happen.")
+
+    # --- Rebalancing: how weights are maintained over the simulated path ---
+    st.markdown("**Rebalancing** — how the portfolio's weights are maintained as prices move.")
+    rb_col1, rb_col2 = st.columns([1, 1])
+    with rb_col1:
+        rebal_choice = st.selectbox("Rebalancing",
+                                    ["🔁 Static weights (rebalance daily)", "🧊 Buy & Hold (let it drift)",
+                                     "📅 Every N days", "🎯 Threshold drift"],
+                                    label_visibility="collapsed")
+    rebal_mode = ("static" if rebal_choice.startswith("🔁") else
+                  "buyhold" if rebal_choice.startswith("🧊") else
+                  "everyN" if rebal_choice.startswith("📅") else "threshold")
+    rebal_n, rebal_thresh = 21, 0.05
+    with rb_col2:
+        if rebal_mode == "everyN":
+            rebal_n = st.number_input("Rebalance every N trading days", min_value=1, value=21,
+                                      help="Trading days between rebalances. ~21 = monthly, ~63 = quarterly, 252 = yearly. Using days (not 'weekly/monthly') avoids calendar ambiguity.")
+        elif rebal_mode == "threshold":
+            _pp = st.slider("Drift threshold (percentage points)", 1, 20, 5,
+                            help="Rebalance back to your starting weights whenever ANY asset drifts more than this many points from its target — e.g. a 30% target hitting 35% is a 5-point drift.")
+            rebal_thresh = _pp / 100.0
+    _explain = {
+        "static":    "🔁 Weights reset to your targets **every day** — the classic constant-mix portfolio.",
+        "buyhold":   "🧊 Set weights once and **never touch them** — winners grow, losers shrink, so the mix drifts.",
+        "everyN":    f"📅 Reset to your starting weights **every {rebal_n} trading days**, banking gains from winners into laggards.",
+        "threshold": f"🎯 Reset to your starting weights only **when an asset drifts more than {int(rebal_thresh*100)} points** from target — trades only when needed.",
+    }
+    st.caption(_explain[rebal_mode])
+
     if st.button("🚀 Run Monte Carlo Simulation", use_container_width=True) and abs(total_weight - 100.0) <= 0.1:
         # Pick the data window based on the chosen regime
         if is_crisis:
@@ -450,21 +497,49 @@ if st.session_state.tickers_list:
                     L = np.linalg.cholesky(log_returns.cov())
                     drift = log_returns.mean().values - 0.5 * np.diag(log_returns.cov().values)
 
+                    n_assets = len(weights)
+                    w_target = np.asarray(weights, dtype=float)
+                    w_target = w_target / w_target.sum()
+
+                    # Per-asset dollar tracking (sims × assets) so weights can drift and be
+                    # rebalanced. We step day-by-day but stay vectorized across all simulations.
+                    value = np.tile(initial_investment * w_target, (simulations, 1))
                     portfolio_sims = np.zeros((time_horizon, simulations))
-                    for i in range(simulations):
-                        Z = np.random.normal(size=(time_horizon, len(weights)))
-                        daily_log_returns = drift + np.dot(Z, L.T)
-                        portfolio_path = np.exp(np.cumsum(np.dot(daily_log_returns, weights)))
-                        portfolio_sims[:, i] = portfolio_path * initial_investment
+                    for t in range(time_horizon):
+                        corr = np.dot(np.random.normal(size=(simulations, n_assets)), L.T)
+                        if use_t:
+                            mixer = np.sqrt(t_df / np.random.chisquare(t_df, size=(simulations, 1)))
+                            shock = corr * mixer * np.sqrt((t_df - 2) / t_df)
+                        else:
+                            shock = corr
+                        value *= np.exp(drift + shock)            # each asset grows on its own
+                        V = value.sum(axis=1)                     # portfolio value per sim
+                        portfolio_sims[t, :] = V
+                        # --- apply the rebalancing rule ---
+                        if rebal_mode == "static":
+                            value = V[:, None] * w_target[None, :]           # back to target every day
+                        elif rebal_mode == "everyN":
+                            if (t + 1) % rebal_n == 0:
+                                value = V[:, None] * w_target[None, :]
+                        elif rebal_mode == "threshold":
+                            drift_amt = np.abs(value / V[:, None] - w_target[None, :]).max(axis=1)
+                            mask = drift_amt > rebal_thresh
+                            if mask.any():
+                                value[mask] = V[mask, None] * w_target[None, :]
+                        # "buyhold": never rebalance — weights drift freely
 
                     ann_vol = float(log_returns.dot(weights).std() * np.sqrt(252))
+                    dist_label = f"Student-t (df={t_df})" if use_t else "Normal"
+                    rebal_label = {"static": "Static", "buyhold": "Buy & Hold",
+                                   "everyN": f"Rebal/{rebal_n}d",
+                                   "threshold": f"Rebal@{int(rebal_thresh*100)}pp"}[rebal_mode]
 
                     st.session_state.portfolio_sims = portfolio_sims
                     st.session_state.sim_initial_investment = initial_investment
                     st.session_state.sim_active_tickers = list(data.columns)
                     st.session_state.sim_returns_data = data
                     st.session_state.sim_days = time_horizon
-                    st.session_state.sim_regime = f"{regime_label} · annualized vol ≈ {ann_vol*100:.0f}%"
+                    st.session_state.sim_regime = f"{regime_label} · {dist_label} · {rebal_label} · vol ≈ {ann_vol*100:.0f}%"
                     st.session_state.sim_excluded = excluded
                     st.session_state.sim_error = None
                     st.rerun()
