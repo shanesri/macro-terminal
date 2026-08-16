@@ -183,6 +183,34 @@ def align_and_filter(close, tickers, weights_pct, start):
         w = w / w.sum()
     return data, w, excluded
 
+def clear_sim_results():
+    """Wipe stale results + error so changing the regime/crisis forces a fresh run."""
+    st.session_state.portfolio_sims = None
+    st.session_state.sim_error = None
+    st.session_state.sim_excluded = []
+
+def inverse_vol_weights(close, expected_days=756):
+    """Risk Parity (simple / inverse-volatility): each asset weighted by 1/volatility,
+       so lower-vol assets get MORE weight and every asset contributes similar risk.
+       Returns (weights_pct dict summing to 100, excluded [no data], short [(ticker, approx_years)]).
+       expected_days ~= 3 years of trading days; assets with much less are flagged as 'short'."""
+    rets = close.pct_change()
+    obs = close.notna().sum()                               # valid price points per asset
+    vol = (rets.std() * np.sqrt(252)).replace(0, np.nan)    # annualized vol per asset
+    vol = vol.dropna()
+    excluded = [c for c in close.columns if c not in vol.index]
+    # Flag assets whose history is well under the ~3y window (vol estimate less reliable)
+    short = [(c, round(obs[c] / 252.0, 1)) for c in vol.index if obs[c] < 0.9 * expected_days]
+    if vol.empty:
+        return {}, excluded, short
+    inv = 1.0 / vol
+    w = (inv / inv.sum() * 100.0).round(2)
+    # nudge the largest so rounding still sums to exactly 100
+    drift = round(100.0 - w.sum(), 2)
+    if abs(drift) >= 0.01:
+        w.iloc[int(w.values.argmax())] += drift
+    return {t: float(w[t]) for t in w.index}, excluded, short
+
 # --- Initialize Session State for Tickers ---
 preset_tickers = {
     'VTI': 30.0,
@@ -211,6 +239,10 @@ if 'sim_days' not in st.session_state:
     st.session_state.sim_days = 252
 if 'sim_regime' not in st.session_state:
     st.session_state.sim_regime = None
+if 'sim_error' not in st.session_state:
+    st.session_state.sim_error = None
+if 'sim_excluded' not in st.session_state:
+    st.session_state.sim_excluded = []
 
 # --- Main App ---
 st.title("📈 Portfolio Simulator (Monte Carlo)")
@@ -255,18 +287,55 @@ if st.session_state.tickers_list:
     
     with col_weights:
         st.subheader("Portfolio Weights")
-        btn_col1, btn_col2 = st.columns(2)
+        btn_col1, btn_col2, btn_col3 = st.columns(3)
         with btn_col1:
-            if st.button("⚖️ Set Equal Weights", use_container_width=True):
+            if st.button("⚖️ Equal Weights", use_container_width=True):
                 if tickers:
                     eq_val = round(100.0 / len(tickers), 2)
                     for t in tickers: st.session_state[f"w_val_{t}"] = eq_val
+                    st.session_state.rp_msg = None
                     st.rerun()
         with btn_col2:
-            if st.button("🔄 Reset All to 0%", use_container_width=True):
+            if st.button("🧠 Risk Parity", use_container_width=True,
+                         help="Inverse-volatility weights: lower-volatility assets get more weight so each contributes similar risk. Uses ~3 years of daily data (or all available history if shorter)."):
+                if tickers:
+                    with st.spinner("Measuring each asset's volatility..."):
+                        rp_end = datetime.now()
+                        rp_start = rp_end - timedelta(days=3 * 365)
+                        rp_close = fetch_close_window(tickers, rp_start, rp_end)
+                        if rp_close.empty:
+                            st.session_state.rp_msg = ("error", "Couldn't fetch data to compute Risk Parity weights.")
+                        else:
+                            w_map, rp_excluded, rp_short = inverse_vol_weights(rp_close)
+                            if not w_map:
+                                st.session_state.rp_msg = ("error", "Not enough history to estimate volatility for these assets.")
+                            else:
+                                for t in tickers:
+                                    st.session_state[f"w_val_{t}"] = float(w_map.get(t, 0.0))
+                                # Build a status message: note history caveats so weights aren't trusted blindly
+                                notes = []
+                                if rp_short:
+                                    notes.append("⚠️ Under 3y of history (volatility estimate less reliable): "
+                                                 + ", ".join(f"{t} (~{yrs}y)" for t, yrs in rp_short))
+                                if rp_excluded:
+                                    notes.append("No history at all → set to 0%: " + ", ".join(rp_excluded))
+                                if notes:
+                                    st.session_state.rp_msg = ("warning", "Risk Parity applied (from ~3y of daily volatility).\n\n" + "\n\n".join(notes))
+                                else:
+                                    st.session_state.rp_msg = ("success", "Risk Parity weights applied — from ~3 years of daily volatility.")
+                    st.rerun()
+        with btn_col3:
+            if st.button("🔄 Reset to 0%", use_container_width=True):
                 for t in tickers:
                     st.session_state[f"w_val_{t}"] = 0.0
+                st.session_state.rp_msg = None
                 st.rerun()
+        st.caption("🧠 **Risk Parity** weights each asset by 1/volatility, measured over **~3 years** of daily data "
+                   "(or all available history if the asset is younger).")
+        # Persistent message — stays until you press another weighting button (doesn't flash away)
+        if st.session_state.get("rp_msg"):
+            kind, text = st.session_state.rp_msg
+            getattr(st, kind)(text)
         
         df_data = []
         for t in tickers:
@@ -320,12 +389,14 @@ if st.session_state.tickers_list:
     reg_col1, reg_col2 = st.columns([1, 1])
     with reg_col1:
         regime = st.radio("Regime", ["📈 Normal (recent history)", "🌊 Crisis (stressed)"],
-                          label_visibility="collapsed", horizontal=True)
+                          label_visibility="collapsed", horizontal=True,
+                          key="regime_choice", on_change=clear_sim_results)
     is_crisis = regime.startswith("🌊")
     crisis_choice = None
     with reg_col2:
         if is_crisis:
-            crisis_choice = st.selectbox("Crisis window", list(CRISES.keys()), label_visibility="collapsed")
+            crisis_choice = st.selectbox("Crisis window", list(CRISES.keys()), label_visibility="collapsed",
+                                         key="crisis_choice", on_change=clear_sim_results)
     if is_crisis:
         st.caption("🌊 **Crisis regime** runs a *forward* Monte Carlo using that crisis period's volatility & "
                    "correlations — a **range of possible futures** if such conditions return. It is **not** the actual "
@@ -355,45 +426,56 @@ if st.session_state.tickers_list:
             start_date = end_date - timedelta(days=lookback_years * 365)
             regime_label = f"📈 Recent history ({lookback_years}y)"
 
+        # Fresh attempt: reset error/results so nothing stale lingers.
+        st.session_state.sim_error = None
+        st.session_state.sim_excluded = []
         with st.spinner("Analyzing macro DNA..."):
             try:
                 close = fetch_close_window(active_tickers, start_date, end_date)
                 if close.empty:
-                    st.error("No price data returned for this window.")
+                    data, weights, excluded = pd.DataFrame(), None, []
                 else:
-                    # Keep only assets that traded in the window; renormalize weights to them
                     data, weights, excluded = align_and_filter(close, active_tickers, active_weights, start_date)
-                    if data.shape[1] == 0 or len(data) < 30:
-                        st.error("Not enough history in this window to simulate — try adding long-history assets "
-                                 "(e.g. ^GSPC) or a more recent window.")
-                    else:
-                        if excluded:
-                            st.info("Excluded (no history in this window): " + ", ".join(excluded)
-                                    + " — remaining weights were renormalized.")
 
-                        log_returns = np.log(data / data.shift(1)).dropna()
-                        L = np.linalg.cholesky(log_returns.cov())
-                        drift = log_returns.mean().values - 0.5 * np.diag(log_returns.cov().values)
+                if data.shape[1] == 0 or len(data) < 30:
+                    # Window & assets don't line up — store a PERSISTENT error, clear results, don't simulate.
+                    msg = "🚫 Your assets and this time window don't line up — not enough overlapping price history to simulate."
+                    if excluded:
+                        msg += f" Excluded: {', '.join(excluded)}."
+                    msg += " Fix it by choosing a more recent window or adding a long-history asset (e.g. ^GSPC), then Run again."
+                    st.session_state.sim_error = msg
+                    st.session_state.portfolio_sims = None
+                else:
+                    log_returns = np.log(data / data.shift(1)).dropna()
+                    L = np.linalg.cholesky(log_returns.cov())
+                    drift = log_returns.mean().values - 0.5 * np.diag(log_returns.cov().values)
 
-                        portfolio_sims = np.zeros((time_horizon, simulations))
-                        for i in range(simulations):
-                            Z = np.random.normal(size=(time_horizon, len(weights)))
-                            daily_log_returns = drift + np.dot(Z, L.T)
-                            portfolio_path = np.exp(np.cumsum(np.dot(daily_log_returns, weights)))
-                            portfolio_sims[:, i] = portfolio_path * initial_investment
+                    portfolio_sims = np.zeros((time_horizon, simulations))
+                    for i in range(simulations):
+                        Z = np.random.normal(size=(time_horizon, len(weights)))
+                        daily_log_returns = drift + np.dot(Z, L.T)
+                        portfolio_path = np.exp(np.cumsum(np.dot(daily_log_returns, weights)))
+                        portfolio_sims[:, i] = portfolio_path * initial_investment
 
-                        # Annualized vol of the portfolio under this regime (feedback for the user)
-                        ann_vol = float(log_returns.dot(weights).std() * np.sqrt(252))
+                    ann_vol = float(log_returns.dot(weights).std() * np.sqrt(252))
 
-                        st.session_state.portfolio_sims = portfolio_sims
-                        st.session_state.sim_initial_investment = initial_investment
-                        st.session_state.sim_active_tickers = list(data.columns)
-                        st.session_state.sim_returns_data = data
-                        st.session_state.sim_days = time_horizon
-                        st.session_state.sim_regime = f"{regime_label} · annualized vol ≈ {ann_vol*100:.0f}%"
-                        st.rerun()
+                    st.session_state.portfolio_sims = portfolio_sims
+                    st.session_state.sim_initial_investment = initial_investment
+                    st.session_state.sim_active_tickers = list(data.columns)
+                    st.session_state.sim_returns_data = data
+                    st.session_state.sim_days = time_horizon
+                    st.session_state.sim_regime = f"{regime_label} · annualized vol ≈ {ann_vol*100:.0f}%"
+                    st.session_state.sim_excluded = excluded
+                    st.session_state.sim_error = None
+                    st.rerun()
             except Exception as e:
-                st.error(f"Engine failure: {e}")
+                st.session_state.sim_error = f"Engine failure: {e}"
+                st.session_state.portfolio_sims = None
+
+    # Persistent error: rendered every run from session_state, so it stays put (doesn't flash away)
+    # and blocks results until the user fixes the window/assets and runs again.
+    if st.session_state.get("sim_error"):
+        st.error(st.session_state.sim_error)
 
     # --- Section 3: Results ---
     if st.session_state.portfolio_sims is not None:
@@ -401,6 +483,9 @@ if st.session_state.tickers_list:
         st.header("3. Simulation Results")
         if st.session_state.get('sim_regime'):
             st.markdown(f"🧬 **Simulated under:** {st.session_state.sim_regime}")
+        if st.session_state.get('sim_excluded'):
+            st.info("Excluded (no history in this window): " + ", ".join(st.session_state.sim_excluded)
+                    + " — remaining weights were renormalized.")
         portfolio_sims, initial_inv = st.session_state.portfolio_sims, st.session_state.sim_initial_investment
         final_values = portfolio_sims[-1, :]
         avg_final, med_final = np.mean(final_values), np.median(final_values)
