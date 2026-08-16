@@ -8,6 +8,12 @@ from datetime import datetime, timedelta
 # --- Page Config ---
 st.set_page_config(page_title="Crisis Replay", page_icon="🌊", layout="wide")
 
+# --- Sidebar greeting ---
+with st.sidebar:
+    st.markdown("## สวัสดี 🙏 Welcome!")
+    st.caption("A little lab where I turn finance theory into working tools.")
+
+
 # --- Custom CSS (shared look with the other pages) ---
 st.markdown(
     """

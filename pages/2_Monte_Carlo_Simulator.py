@@ -8,6 +8,12 @@ from datetime import datetime, timedelta
 # --- Page Config ---
 st.set_page_config(page_title="Monte Carlo Simulator", page_icon="📈", layout="wide")
 
+# --- Sidebar greeting ---
+with st.sidebar:
+    st.markdown("## สวัสดี 🙏 Welcome!")
+    st.caption("A little lab where I turn finance theory into working tools.")
+
+
 # --- Custom CSS for Layout, Cards & Sidebar ---
 st.markdown(
     """
@@ -439,20 +445,19 @@ if st.session_state.tickers_list:
     st.markdown("**Rebalancing** — how the portfolio's weights are maintained as prices move.")
     rb_col1, rb_col2 = st.columns([1, 1])
     with rb_col1:
-        rebal_choice = st.selectbox("Rebalancing",
+        rebal_choice = st.selectbox("Mode",
                                     ["🔁 Static weights (rebalance daily)", "🧊 Buy & Hold (let it drift)",
-                                     "📅 Every N days", "🎯 Threshold drift"],
-                                    label_visibility="collapsed")
+                                     "📅 Every N days", "🎯 Threshold drift"])
     rebal_mode = ("static" if rebal_choice.startswith("🔁") else
                   "buyhold" if rebal_choice.startswith("🧊") else
                   "everyN" if rebal_choice.startswith("📅") else "threshold")
     rebal_n, rebal_thresh = 21, 0.05
     with rb_col2:
         if rebal_mode == "everyN":
-            rebal_n = st.number_input("Rebalance every N trading days", min_value=1, value=21,
+            rebal_n = st.number_input("Every N days", min_value=1, value=21,
                                       help="Trading days between rebalances. ~21 = monthly, ~63 = quarterly, 252 = yearly. Using days (not 'weekly/monthly') avoids calendar ambiguity.")
         elif rebal_mode == "threshold":
-            _pp = st.slider("Drift threshold (percentage points)", 1, 20, 5,
+            _pp = st.slider("Drift (points)", 1, 20, 5,
                             help="Rebalance back to your starting weights whenever ANY asset drifts more than this many points from its target — e.g. a 30% target hitting 35% is a 5-point drift.")
             rebal_thresh = _pp / 100.0
     _explain = {

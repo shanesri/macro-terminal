@@ -10,6 +10,12 @@ from scipy.optimize import minimize
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Weight Optimizer", page_icon="⚖️", layout="wide")
 
+# --- Sidebar greeting ---
+with st.sidebar:
+    st.markdown("## สวัสดี 🙏 Welcome!")
+    st.caption("A little lab where I turn finance theory into working tools.")
+
+
 # --- CUSTOM CSS (From your Macro Dashboard) ---
 st.markdown(
     """
